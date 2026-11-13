@@ -1,1625 +1,679 @@
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-HK">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CYBER TIC-TAC-TOE // 賽博龐克雙人連線過三關</title>
+  <title>CYBER TIC-TAC-TOE // 賽博井字過三關</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- 科幻字體：Orbitron 與 Noto Sans TC -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;700;900&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
-  
+  <!-- PeerJS：免伺服器、免註冊的點對點即時連線引擎 -->
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <!-- QRCodeJS：自動生成專屬房間邀請 QR Code -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Noto+Sans+TC:wght@400;700;900&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-dark: #070710;
       --neon-cyan: #00f3ff;
       --neon-pink: #ff007f;
-      --neon-purple: #bc13fe;
-      --neon-yellow: #fcee0a;
+      --neon-yellow: #ffe600;
+      --bg-dark: #070913;
     }
-
-    * {
-      box-sizing: border-box;
-      user-select: none;
-      -webkit-tap-highlight-color: transparent;
-    }
-
     body {
       background-color: var(--bg-dark);
       color: #e2e8f0;
       font-family: 'Orbitron', 'Noto Sans TC', sans-serif;
-      overflow-x: hidden;
+      background-image:
+        radial-gradient(circle at 20% 20%, rgba(0, 243, 255, 0.12) 0%, transparent 40%),
+        radial-gradient(circle at 80% 80%, rgba(255, 0, 127, 0.12) 0%, transparent 40%),
+        linear-gradient(rgba(0, 243, 255, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0, 243, 255, 0.04) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 36px 36px, 36px 36px;
       min-height: 100vh;
-      margin: 0;
-      position: relative;
     }
-
-    /* 賽博龐克全息網格背景 */
-    .cyber-grid {
-      position: fixed;
-      inset: 0;
-      background-image: 
-        linear-gradient(to right, rgba(0, 243, 255, 0.06) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(188, 19, 254, 0.06) 1px, transparent 1px);
-      background-size: 40px 40px;
-      z-index: -2;
-      pointer-events: none;
+    .cyber-card {
+      background: rgba(13, 18, 36, 0.88);
+      border: 1px solid rgba(0, 243, 255, 0.35);
+      box-shadow: 0 0 25px rgba(0, 243, 255, 0.15), inset 0 0 15px rgba(0, 243, 255, 0.05);
+      backdrop-filter: blur(12px);
     }
-
-    /* 掃描線特效 */
-    .scanlines {
-      position: fixed;
-      inset: 0;
-      background: linear-gradient(
-        rgba(18, 16, 16, 0) 50%, 
-        rgba(0, 0, 0, 0.35) 50%
-      );
-      background-size: 100% 4px;
-      z-index: -1;
-      pointer-events: none;
-    }
-
-    /* 霓虹發光邊框與文字 */
-    .neon-border-cyan {
-      border: 1px solid rgba(0, 243, 255, 0.5);
-      box-shadow: 0 0 15px rgba(0, 243, 255, 0.2), inset 0 0 10px rgba(0, 243, 255, 0.1);
-    }
-
-    .neon-border-pink {
-      border: 1px solid rgba(255, 0, 127, 0.5);
-      box-shadow: 0 0 15px rgba(255, 0, 127, 0.2), inset 0 0 10px rgba(255, 0, 127, 0.1);
-    }
-
-    .neon-border-purple {
-      border: 1px solid rgba(188, 19, 254, 0.55);
-      box-shadow: 0 0 20px rgba(188, 19, 254, 0.25), inset 0 0 12px rgba(188, 19, 254, 0.12);
-    }
-
-    .text-glow-cyan {
+    .neon-text-cyan {
       color: var(--neon-cyan);
-      text-shadow: 0 0 8px rgba(0, 243, 255, 0.8), 0 0 20px rgba(0, 243, 255, 0.4);
+      text-shadow: 0 0 10px rgba(0, 243, 255, 0.8), 0 0 24px rgba(0, 243, 255, 0.4);
     }
-
-    .text-glow-pink {
+    .neon-text-pink {
       color: var(--neon-pink);
-      text-shadow: 0 0 8px rgba(255, 0, 127, 0.8), 0 0 20px rgba(255, 0, 127, 0.4);
+      text-shadow: 0 0 10px rgba(255, 0, 127, 0.8), 0 0 24px rgba(255, 0, 127, 0.4);
     }
-
-    .text-glow-yellow {
-      color: var(--neon-yellow);
-      text-shadow: 0 0 8px rgba(252, 238, 10, 0.8);
+    .cyber-btn-cyan {
+      background: linear-gradient(135deg, rgba(0, 243, 255, 0.2), rgba(0, 243, 255, 0.05));
+      border: 1.5px solid var(--neon-cyan);
+      color: var(--neon-cyan);
+      box-shadow: 0 0 15px rgba(0, 243, 255, 0.25);
+      transition: all 0.2s ease;
     }
-
-    /* 賽博按鈕樣式 */
-    .cyber-btn {
-      position: relative;
-      transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1);
-      overflow: hidden;
-      letter-spacing: 0.05em;
-    }
-
-    .cyber-btn:hover:not(:disabled) {
+    .cyber-btn-cyan:hover:not(:disabled) {
+      background: var(--neon-cyan);
+      color: #050811;
+      box-shadow: 0 0 25px rgba(0, 243, 255, 0.7);
       transform: translateY(-2px);
     }
-
-    .cyber-btn:active:not(:disabled) {
-      transform: scale(0.97);
+    .cyber-btn-pink {
+      background: linear-gradient(135deg, rgba(255, 0, 127, 0.2), rgba(255, 0, 127, 0.05));
+      border: 1.5px solid var(--neon-pink);
+      color: var(--neon-pink);
+      box-shadow: 0 0 15px rgba(255, 0, 127, 0.25);
+      transition: all 0.2s ease;
     }
-
-    .cyber-btn:disabled {
-      opacity: 0.45;
+    .cyber-btn-pink:hover:not(:disabled) {
+      background: var(--neon-pink);
+      color: #ffffff;
+      box-shadow: 0 0 25px rgba(255, 0, 127, 0.7);
+      transform: translateY(-2px);
+    }
+    .cyber-btn-cyan:disabled, .cyber-btn-pink:disabled {
+      opacity: 0.4;
       cursor: not-allowed;
     }
-
-    .btn-cyan {
-      background: linear-gradient(135deg, rgba(0, 243, 255, 0.18), rgba(0, 119, 255, 0.25));
-      border: 1px solid var(--neon-cyan);
-      color: #fff;
-      box-shadow: 0 0 15px rgba(0, 243, 255, 0.3);
-    }
-
-    .btn-cyan:hover:not(:disabled) {
-      background: linear-gradient(135deg, rgba(0, 243, 255, 0.35), rgba(0, 119, 255, 0.4));
-      box-shadow: 0 0 25px rgba(0, 243, 255, 0.6);
-    }
-
-    .btn-pink {
-      background: linear-gradient(135deg, rgba(255, 0, 127, 0.18), rgba(188, 19, 254, 0.25));
-      border: 1px solid var(--neon-pink);
-      color: #fff;
-      box-shadow: 0 0 15px rgba(255, 0, 127, 0.3);
-    }
-
-    .btn-pink:hover:not(:disabled) {
-      background: linear-gradient(135deg, rgba(255, 0, 127, 0.35), rgba(188, 19, 254, 0.4));
-      box-shadow: 0 0 25px rgba(255, 0, 127, 0.6);
-    }
-
-    /* 3D 霓虹骰子容器 */
-    .dice-scene {
-      width: 96px;
-      height: 96px;
-      perspective: 600px;
-      margin: 0 auto;
-    }
-
-    .dice-cube {
-      width: 100%;
-      height: 100%;
-      position: relative;
-      transform-style: preserve-3d;
-      transition: transform 1.1s cubic-bezier(0.2, 0.85, 0.3, 1.05);
-    }
-
-    .dice-cube.rolling {
-      animation: diceSpin 0.45s infinite linear;
-    }
-
-    @keyframes diceSpin {
-      0% { transform: rotateX(0deg) rotateY(0deg) rotateZ(0deg); }
-      100% { transform: rotateX(360deg) rotateY(360deg) rotateZ(180deg); }
-    }
-
-    .dice-face {
-      position: absolute;
-      width: 96px;
-      height: 96px;
-      background: rgba(12, 14, 28, 0.92);
-      border-radius: 16px;
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      grid-template-rows: repeat(3, 1fr);
-      padding: 14px;
-      gap: 6px;
-      backface-visibility: visible;
-    }
-
-    .dice-cyan .dice-face {
-      border: 2px solid var(--neon-cyan);
-      box-shadow: inset 0 0 15px rgba(0, 243, 255, 0.35), 0 0 10px rgba(0, 243, 255, 0.3);
-    }
-
-    .dice-pink .dice-face {
-      border: 2px solid var(--neon-pink);
-      box-shadow: inset 0 0 15px rgba(255, 0, 127, 0.35), 0 0 10px rgba(255, 0, 127, 0.3);
-    }
-
-    .pip {
-      width: 100%;
-      height: 100%;
-      border-radius: 50%;
-      align-self: center;
-      justify-self: center;
-    }
-
-    .dice-cyan .pip {
-      background: var(--neon-cyan);
-      box-shadow: 0 0 8px var(--neon-cyan);
-    }
-
-    .dice-pink .pip {
-      background: var(--neon-pink);
-      box-shadow: 0 0 8px var(--neon-pink);
-    }
-
-    /* 骰子六面 3D 定位 */
-    .face-1 { transform: rotateY(0deg) translateZ(48px); }
-    .face-2 { transform: rotateY(90deg) translateZ(48px); }
-    .face-3 { transform: rotateY(180deg) translateZ(48px); }
-    .face-4 { transform: rotateY(-90deg) translateZ(48px); }
-    .face-5 { transform: rotateX(90deg) translateZ(48px); }
-    .face-6 { transform: rotateX(-90deg) translateZ(48px); }
-
-    /* 九宮格格子與符號發光特效 */
-    .board-cell {
-      background: rgba(15, 18, 35, 0.78);
-      border: 1px solid rgba(0, 243, 255, 0.25);
+    .cell-box {
+      aspect-ratio: 1 / 1;
+      background: rgba(10, 15, 30, 0.9);
+      border: 1.5px solid rgba(0, 243, 255, 0.3);
       box-shadow: inset 0 0 12px rgba(0, 243, 255, 0.08);
-      transition: all 0.2s ease;
-      position: relative;
+      transition: all 0.18s ease;
     }
-
-    .board-cell:hover:not(.occupied):not(.disabled) {
-      background: rgba(0, 243, 255, 0.12);
+    .cell-box:hover:not(.occupied):not(.locked) {
       border-color: var(--neon-cyan);
-      box-shadow: inset 0 0 18px rgba(0, 243, 255, 0.25), 0 0 12px rgba(0, 243, 255, 0.25);
+      background: rgba(0, 243, 255, 0.1);
+      box-shadow: 0 0 18px rgba(0, 243, 255, 0.35);
       cursor: pointer;
     }
-
-    .symbol-cool {
-      filter: drop-shadow(0 0 12px rgba(0, 243, 255, 0.95)) drop-shadow(0 0 24px rgba(0, 243, 255, 0.6));
-      animation: popIn 0.32s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    .cell-win {
+      border-color: var(--neon-yellow) !important;
+      background: rgba(255, 230, 0, 0.18) !important;
+      box-shadow: 0 0 28px rgba(255, 230, 0, 0.7) !important;
+      animation: pulseWin 0.8s infinite alternate;
     }
-
-    .symbol-devil {
-      filter: drop-shadow(0 0 12px rgba(255, 0, 127, 0.95)) drop-shadow(0 0 24px rgba(188, 19, 254, 0.7));
-      animation: popIn 0.32s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    @keyframes pulseWin {
+      from { transform: scale(1); }
+      to { transform: scale(1.05); }
     }
-
-    @keyframes popIn {
-      0% { transform: scale(0.2) rotate(-15deg); opacity: 0; }
-      100% { transform: scale(1) rotate(0deg); opacity: 1; }
+    .dice-rolling {
+      animation: diceShake 0.45s infinite linear;
     }
-
-    /* 高能勝利雷射光束 */
-    .laser-line {
-      stroke-linecap: round;
-      stroke-dasharray: 450;
-      stroke-dashoffset: 450;
-      animation: drawLaser 0.55s ease-out forwards;
+    @keyframes diceShake {
+      0% { transform: rotate(0deg) scale(1.05); }
+      25% { transform: rotate(-14deg) scale(1.1); }
+      50% { transform: rotate(14deg) scale(1.05); }
+      75% { transform: rotate(-10deg) scale(1.1); }
+      100% { transform: rotate(0deg) scale(1.05); }
     }
-
-    @keyframes drawLaser {
-      to { stroke-dashoffset: 0; }
-    }
-
-    /* 粒子特效畫布 */
-    #particleCanvas {
-      position: fixed;
-      inset: 0;
-      pointer-events: none;
-      z-index: 40;
+    #qrcode img, #qrcode canvas {
+      margin: 0 auto;
+      border: 6px solid #ffffff;
+      border-radius: 8px;
     }
   </style>
 </head>
-<body class="flex flex-col items-center justify-between p-3 sm:p-6">
-  <div class="cyber-grid"></div>
-  <div class="scanlines"></div>
-  <canvas id="particleCanvas"></canvas>
+<body class="flex flex-col items-center justify-center p-4">
 
-  <!-- 頂部導覽列 -->
-  <header class="w-full max-w-3xl flex items-center justify-between px-4 py-3 rounded-2xl bg-slate-950/80 neon-border-purple backdrop-blur-md z-10">
-    <div class="flex items-center gap-2.5">
-      <div class="w-3 h-3 rounded-full bg-cyan-400 animate-ping"></div>
-      <h1 class="text-base sm:text-xl font-black tracking-wider bg-gradient-to-r from-cyan-400 via-fuchsia-400 to-pink-500 bg-clip-text text-transparent">
-        CYBER 井字過三關
-      </h1>
-    </div>
-
-    <div class="flex items-center gap-2">
-      <span id="connectionBadge" class="hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-cyan-950/70 border border-cyan-500/40 text-cyan-300">
-        <span class="w-2 h-2 rounded-full bg-cyan-400"></span>
-        <span id="connectionText">連線就緒</span>
-      </span>
-
-      <!-- 音效開關 -->
-      <button id="soundToggleBtn" onclick="toggleSound()" title="切換科幻音效" class="p-2 rounded-xl bg-slate-900/90 border border-purple-500/40 text-purple-300 hover:border-cyan-400 hover:text-cyan-300 transition">
-        <span id="soundIcon">🔊</span>
-      </button>
-
-      <!-- 返回大廳按鈕 -->
-      <button id="leaveRoomBtn" onclick="confirmLeaveRoom()" class="hidden px-3 py-1.5 rounded-xl bg-rose-950/70 border border-rose-500/50 text-rose-300 text-xs sm:text-sm font-bold hover:bg-rose-900/80 transition">
-        離開房間
-      </button>
-    </div>
+  <!-- 頂部標題 -->
+  <header class="text-center mb-6">
+    <div class="text-xs tracking-[0.35em] text-cyan-400/80 mb-1">NEON ARENA // DUEL PROTOCOL</div>
+    <h1 class="text-3xl md:text-5xl font-black tracking-wider">
+      <span class="neon-text-cyan">CYBER</span> <span class="text-white">井字過三關</span>
+    </h1>
+    <p class="text-xs md:text-sm text-slate-400 mt-2">
+      雙人即時連線對決 ｜ 擲骰比小決定先手 ｜ <span class="text-cyan-300">😎</span> VS <span class="text-pink-400">😈</span>
+    </p>
   </header>
 
-  <!-- 自定義訊息提示 Toast（取代 alert） -->
-  <div id="toastBox" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 opacity-0 -translate-y-3">
-    <div id="toastContent" class="px-5 py-2.5 rounded-2xl bg-slate-900/95 border border-cyan-400 text-cyan-200 text-sm font-bold shadow-[0_0_20px_rgba(0,243,255,0.4)] backdrop-blur-md">
-      系統提示
+  <!-- 訊息提示條 -->
+  <div id="toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 hidden px-5 py-2.5 rounded-full bg-slate-900/95 border border-cyan-400 text-cyan-300 text-sm font-bold shadow-lg"></div>
+
+  <!-- 畫面 1：大廳（建立房間 / 加入房間 / 單機測試） -->
+  <main id="screen-lobby" class="cyber-card w-full max-w-md rounded-2xl p-6 md:p-8 space-y-6">
+    <div class="space-y-3">
+      <div class="text-xs tracking-widest text-cyan-400 font-bold">01 // 開啟新對戰（房主 😎）</div>
+      <button id="btn-create-room" class="cyber-btn-cyan w-full py-3.5 rounded-xl font-bold text-base tracking-wider">
+        ⚡ 建立線上對戰房間
+      </button>
     </div>
-  </div>
 
-  <!-- 主內容區塊 -->
-  <main class="w-full max-w-3xl flex-1 flex flex-col items-center justify-center my-4 z-10">
-
-    <!-- ==================== 1. 大廳畫面 (LOBBY) ==================== -->
-    <section id="lobbyScreen" class="w-full max-w-lg rounded-3xl bg-slate-950/85 neon-border-cyan p-6 sm:p-8 backdrop-blur-xl shadow-2xl">
-      <div class="text-center mb-6">
-        <p class="text-xs uppercase tracking-[0.25em] text-cyan-400 mb-1">NEURAL ARENA // v2.077</p>
-        <h2 class="text-2xl sm:text-3xl font-black text-white">雙人連線策略對決</h2>
-        <p class="text-slate-400 text-xs sm:text-sm mt-2">
-          一位同學建立房間並分享連結，另一位點擊連結即可加入！
-        </p>
-      </div>
-
-      <!-- 玩家暱稱設定 -->
-      <div class="mb-6">
-        <label class="block text-xs font-bold text-cyan-300 uppercase tracking-wider mb-2">你的玩家代號 (暱稱)</label>
-        <input id="playerNameInput" type="text" maxlength="12" placeholder="輸入你的代號（例：CyberKid）"
-          class="w-full px-4 py-3 rounded-xl bg-slate-900/90 border border-cyan-500/40 text-white placeholder-slate-500 focus:outline-none focus:border-cyan-400 focus:shadow-[0_0_15px_rgba(0,243,255,0.3)] transition text-sm sm:text-base" />
-      </div>
-
-      <!-- 建立房間按鈕 -->
-      <button id="createRoomBtn" onclick="createOnlineRoom()" class="cyber-btn btn-cyan w-full py-3.5 px-5 rounded-2xl font-black text-base sm:text-lg flex items-center justify-center gap-2 mb-5">
-        <span>⚡ 建立對戰房間 (房主 😎)</span>
-      </button>
-
-      <!-- 分隔線 -->
-      <div class="relative flex py-2 items-center mb-5">
-        <div class="flex-grow border-t border-slate-800"></div>
-        <span class="flex-shrink mx-3 text-xs text-slate-500 font-bold tracking-widest">或輸入房間代碼加入</span>
-        <div class="flex-grow border-t border-slate-800"></div>
-      </div>
-
-      <!-- 加入房間區塊 -->
-      <div class="flex gap-2.5 mb-6">
-        <input id="roomCodeInput" type="text" maxlength="6" placeholder="輸入 6 位代碼"
-          class="flex-1 px-4 py-3 rounded-xl bg-slate-900/90 border border-pink-500/40 text-center uppercase tracking-[0.25em] font-black text-pink-300 placeholder-slate-600 focus:outline-none focus:border-pink-400 focus:shadow-[0_0_15px_rgba(255,0,127,0.3)] transition text-base" />
-        <button id="joinRoomBtn" onclick="joinOnlineRoom()" class="cyber-btn btn-pink px-6 py-3 rounded-xl font-black text-sm sm:text-base whitespace-nowrap">
-          加入對戰 😈
+    <div class="border-t border-slate-700/80 pt-5 space-y-3">
+      <div class="text-xs tracking-widest text-pink-400 font-bold">02 // 輸入代碼加入（挑戰者 😈）</div>
+      <div class="flex gap-2">
+        <input id="input-room-code" type="text" maxlength="10" placeholder="輸入 6 位房間代碼"
+          class="flex-1 bg-slate-950/90 border border-pink-500/50 rounded-xl px-4 py-3 text-center uppercase tracking-widest text-pink-300 font-bold focus:outline-none focus:border-pink-400" />
+        <button id="btn-join-room" class="cyber-btn-pink px-5 py-3 rounded-xl font-bold whitespace-nowrap">
+          加入戰局
         </button>
       </div>
+    </div>
 
-      <!-- 單機同屏測試模式 -->
-      <div class="pt-4 border-t border-slate-800/80 text-center">
-        <button onclick="startLocalTestMode()" class="w-full py-2.5 px-4 rounded-xl bg-slate-900/70 border border-purple-500/40 text-purple-300 hover:border-purple-400 hover:text-white text-xs sm:text-sm font-bold transition flex items-center justify-center gap-2">
-          <span>🎮 單機同屏測試模式（一人控制雙人快速體驗）</span>
-        </button>
-      </div>
-    </section>
-
-    <!-- ==================== 2. 等待邀請畫面 (WAITING) ==================== -->
-    <section id="waitingScreen" class="hidden w-full max-w-lg rounded-3xl bg-slate-950/85 neon-border-purple p-6 sm:p-8 backdrop-blur-xl text-center">
-      <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-purple-950/80 border border-purple-400/50 text-purple-300 text-xs font-bold mb-4">
-        <span class="w-2 h-2 rounded-full bg-purple-400 animate-ping"></span>
-        等待對手連線中...
-      </div>
-
-      <h2 class="text-xl sm:text-2xl font-black text-white mb-2">邀請同學加入戰局</h2>
-      <p class="text-slate-400 text-xs sm:text-sm mb-6">將下方專屬邀請連結傳送給同學，對方點擊即可自動連線進入！</p>
-
-      <!-- 房間代碼顯示框 -->
-      <div class="p-4 rounded-2xl bg-slate-900/90 border border-cyan-500/40 mb-4">
-        <p class="text-xs text-cyan-400 font-bold tracking-widest mb-1">房間代碼 (ROOM ID)</p>
-        <div id="displayRoomCode" class="text-3xl sm:text-4xl font-black tracking-[0.25em] text-glow-cyan select-all">
-          ------
-        </div>
-      </div>
-
-      <!-- 邀請連結複製按鈕 -->
-      <button onclick="copyInviteLink()" class="cyber-btn btn-cyan w-full py-3.5 px-5 rounded-2xl font-black text-sm sm:text-base flex items-center justify-center gap-2 mb-3">
-        <span>🔗 一鍵複製專屬邀請連結</span>
+    <div class="border-t border-slate-700/80 pt-4 text-center">
+      <button id="btn-local-mode" class="text-xs text-slate-400 hover:text-cyan-300 underline tracking-wider">
+        單人同機雙角色測試模式（不需連線）
       </button>
-
-      <button onclick="copyRoomCode()" class="w-full py-2.5 px-4 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 hover:text-white hover:border-cyan-400 text-xs font-bold transition">
-        📋 僅複製房間代碼
-      </button>
-    </section>
-
-    <!-- ==================== 3. 擲骰子決定先手畫面 (DICE ROLL) ==================== -->
-    <section id="diceScreen" class="hidden w-full max-w-2xl rounded-3xl bg-slate-950/85 neon-border-purple p-6 sm:p-8 backdrop-blur-xl text-center">
-      <div class="mb-5">
-        <span class="px-3 py-1 rounded-full bg-yellow-500/15 border border-yellow-400/50 text-yellow-300 text-xs font-bold tracking-wider">
-          PHASE 01 // 先手權判定
-        </span>
-        <h2 class="text-2xl sm:text-3xl font-black text-white mt-2">擲骰子決定誰先開始</h2>
-        <p class="text-cyan-300 text-xs sm:text-sm font-bold mt-1">⚡ 規則：擲出點數「較小」的一方獲得先手權！</p>
-      </div>
-
-      <!-- 雙人骰子對決區 -->
-      <div class="grid grid-cols-2 gap-4 sm:gap-8 my-6">
-        <!-- 玩家 1 骰子區 -->
-        <div class="p-4 sm:p-6 rounded-2xl bg-slate-900/85 neon-border-cyan flex flex-col items-center">
-          <div class="text-3xl mb-1">😎</div>
-          <div id="diceP1Name" class="text-sm sm:text-base font-black text-cyan-300 truncate max-w-full">玩家 1</div>
-          <div class="text-[11px] text-slate-400 mb-4">霓虹青先鋒</div>
-
-          <!-- 3D 骰子 1 -->
-          <div class="dice-scene dice-cyan mb-4">
-            <div id="diceCube1" class="dice-cube">
-              <!-- 面 1-6 由 JS 動態生成點數 -->
-            </div>
-          </div>
-
-          <div id="diceP1Result" class="h-7 text-base sm:text-lg font-black text-glow-cyan mb-3">
-            等待擲骰...
-          </div>
-
-          <button id="rollP1Btn" onclick="rollPlayerDice('p1')" class="cyber-btn btn-cyan w-full py-2.5 px-4 rounded-xl font-black text-xs sm:text-sm">
-            🎲 擲出骰子
-          </button>
-        </div>
-
-        <!-- 玩家 2 骰子區 -->
-        <div class="p-4 sm:p-6 rounded-2xl bg-slate-900/85 neon-border-pink flex flex-col items-center">
-          <div class="text-3xl mb-1">😈</div>
-          <div id="diceP2Name" class="text-sm sm:text-base font-black text-pink-400 truncate max-w-full">玩家 2</div>
-          <div class="text-[11px] text-slate-400 mb-4">霓虹魅影</div>
-
-          <!-- 3D 骰子 2 -->
-          <div class="dice-scene dice-pink mb-4">
-            <div id="diceCube2" class="dice-cube">
-              <!-- 面 1-6 由 JS 動態生成點數 -->
-            </div>
-          </div>
-
-          <div id="diceP2Result" class="h-7 text-base sm:text-lg font-black text-glow-pink mb-3">
-            等待擲骰...
-          </div>
-
-          <button id="rollP2Btn" onclick="rollPlayerDice('p2')" class="cyber-btn btn-pink w-full py-2.5 px-4 rounded-xl font-black text-xs sm:text-sm">
-            🎲 擲出骰子
-          </button>
-        </div>
-      </div>
-
-      <!-- 骰子判定結果訊息框 -->
-      <div id="diceStatusBanner" class="p-3.5 rounded-2xl bg-slate-900/90 border border-purple-500/40 text-sm sm:text-base font-bold text-purple-200">
-        請雙方點擊按鈕擲出自己的骰子！
-      </div>
-    </section>
-
-    <!-- ==================== 4. 井字過三關主戰場 (GAME BOARD) ==================== -->
-    <section id="gameScreen" class="hidden w-full max-w-xl flex flex-col items-center">
-      
-      <!-- 雙方玩家資訊與記分板 -->
-      <div class="w-full grid grid-cols-3 gap-2 sm:gap-3 mb-4">
-        <!-- P1 卡片 -->
-        <div id="p1Card" class="p-3 rounded-2xl bg-slate-950/85 neon-border-cyan flex flex-col items-center transition-all duration-300">
-          <div class="flex items-center gap-1.5">
-            <span class="text-xl sm:text-2xl">😎</span>
-            <span id="gameP1Name" class="text-xs sm:text-sm font-black text-cyan-300 truncate max-w-[75px] sm:max-w-[110px]">玩家 1</span>
-          </div>
-          <div class="mt-1 flex items-center gap-1.5">
-            <span class="text-[10px] text-slate-400">勝場</span>
-            <span id="p1Score" class="text-base sm:text-lg font-black text-glow-cyan">0</span>
-          </div>
-          <span id="p1TurnTag" class="mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-cyan-500/20 text-cyan-300 opacity-0 transition-opacity">
-            思考中...
-          </span>
-        </div>
-
-        <!-- 平手與回合資訊 -->
-        <div class="p-3 rounded-2xl bg-slate-950/85 border border-purple-500/40 flex flex-col items-center justify-center text-center">
-          <span class="text-[10px] text-purple-300 font-bold tracking-widest">ROOM</span>
-          <span id="gameRoomBadge" class="text-xs sm:text-sm font-black text-white tracking-wider my-0.5">LOCAL</span>
-          <div class="text-[11px] text-slate-400">
-            平手: <span id="drawScore" class="font-bold text-purple-300">0</span>
-          </div>
-        </div>
-
-        <!-- P2 卡片 -->
-        <div id="p2Card" class="p-3 rounded-2xl bg-slate-950/85 neon-border-pink flex flex-col items-center transition-all duration-300">
-          <div class="flex items-center gap-1.5">
-            <span class="text-xl sm:text-2xl">😈</span>
-            <span id="gameP2Name" class="text-xs sm:text-sm font-black text-pink-400 truncate max-w-[75px] sm:max-w-[110px]">玩家 2</span>
-          </div>
-          <div class="mt-1 flex items-center gap-1.5">
-            <span class="text-[10px] text-slate-400">勝場</span>
-            <span id="p2Score" class="text-base sm:text-lg font-black text-glow-pink">0</span>
-          </div>
-          <span id="p2TurnTag" class="mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-pink-500/20 text-pink-300 opacity-0 transition-opacity">
-            思考中...
-          </span>
-        </div>
-      </div>
-
-      <!-- 當前回合狀態橫幅 -->
-      <div id="turnBanner" class="w-full py-2.5 px-4 mb-4 rounded-2xl bg-slate-900/90 border border-cyan-400/50 text-center font-black text-sm sm:text-base text-cyan-200 shadow-[0_0_15px_rgba(0,243,255,0.2)] transition-all">
-        準備開始對戰...
-      </div>
-
-      <!-- 3x3 賽博龐克九宮格棋盤 -->
-      <div class="relative w-full max-w-[360px] sm:max-w-[400px] aspect-square p-3 sm:p-4 rounded-3xl bg-slate-950/90 neon-border-purple shadow-[0_0_35px_rgba(188,19,254,0.25)]">
-        <div id="boardGrid" class="w-full h-full grid grid-cols-3 grid-rows-3 gap-2.5 sm:gap-3">
-          <!-- 9 個格子由 JS 生成 -->
-        </div>
-
-        <!-- 高能雷射連線 SVG 覆蓋層 -->
-        <svg id="laserOverlay" viewBox="0 0 300 300" class="hidden absolute inset-0 w-full h-full pointer-events-none p-3 sm:p-4">
-          <defs>
-            <filter id="neonGlow" x="-30%" y="-30%" width="160%" height="160%">
-              <feGaussianBlur stdDeviation="5" result="blur" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-          </defs>
-          <line id="winLaserLine" x1="0" y1="0" x2="0" y2="0" stroke="#00f3ff" stroke-width="8" filter="url(#neonGlow)" class="laser-line" />
-        </svg>
-      </div>
-
-      <!-- 局末結算與再戰控制區 -->
-      <div id="roundResultBox" class="hidden w-full max-w-[400px] mt-5 p-4 rounded-2xl bg-slate-950/95 neon-border-cyan text-center backdrop-blur-md">
-        <h3 id="winnerAnnouncement" class="text-xl sm:text-2xl font-black text-glow-yellow mb-2">
-          🎉 勝利宣告！
-        </h3>
-        <p id="rematchStatusText" class="text-xs sm:text-sm text-slate-300 mb-3">
-          點擊下方按鈕進行下一局（重新擲骰決定先手）
-        </p>
-        <button id="rematchBtn" onclick="requestRematch()" class="cyber-btn btn-cyan w-full py-3 px-5 rounded-xl font-black text-sm sm:text-base">
-          🔄 再戰一局（重新擲骰）
-        </button>
-      </div>
-
-    </section>
+    </div>
   </main>
 
-  <!-- 底部版權與操作提示 -->
-  <footer class="w-full max-w-3xl text-center text-[11px] text-slate-500 py-2 z-10">
-    連線規則：橫線、直線或斜線連成三個相同符號即獲勝 ｜ 骰子點數較小者先攻
-  </footer>
+  <!-- 畫面 2：等待對手加入（顯示邀請連結與 QR Code） -->
+  <section id="screen-waiting" class="cyber-card w-full max-w-md rounded-2xl p-6 md:p-8 text-center space-y-5 hidden">
+    <div class="inline-block px-3 py-1 rounded-full bg-cyan-500/15 border border-cyan-400/40 text-cyan-300 text-xs tracking-widest">
+      WAITING FOR CHALLENGER...
+    </div>
+    <h2 class="text-xl font-bold text-white">邀請另一位同學加入對戰</h2>
 
-  <!-- Firebase 與遊戲核心邏輯 -->
-  <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
-    import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-    import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+    <div class="bg-slate-950/80 border border-cyan-500/30 rounded-xl p-4 space-y-2">
+      <div class="text-xs text-slate-400">專屬房間代碼</div>
+      <div id="display-room-code" class="text-3xl font-black tracking-[0.25em] neon-text-cyan">------</div>
+    </div>
 
-    // ==================== 1. Web Audio API 賽博音效合成器 ====================
-    let audioCtx = null;
-    let soundEnabled = true;
+    <!-- QR Code 區塊 -->
+    <div class="space-y-2">
+      <div class="text-xs text-slate-400">同學可用手機相機直接掃描 QR Code 加入：</div>
+      <div id="qrcode" class="py-2 flex justify-center"></div>
+    </div>
 
-    function initAudio() {
-      if (!audioCtx) {
-        const AudioContext = window.AudioContext || window.webkitAudioContext;
-        audioCtx = new AudioContext();
-      }
-      if (audioCtx.state === 'suspended') {
-        audioCtx.resume();
-      }
-    }
+    <div class="space-y-2">
+      <button id="btn-copy-link" class="cyber-btn-cyan w-full py-3 rounded-xl font-bold text-sm">
+        📋 一鍵複製完整邀請連結與訊息
+      </button>
+      <p id="connection-status" class="text-xs text-amber-300 animate-pulse">正在連線至 P2P 配對網路...</p>
+    </div>
+  </section>
 
-    window.toggleSound = function() {
-      soundEnabled = !soundEnabled;
-      document.getElementById('soundIcon').textContent = soundEnabled ? '🔊' : '🔇';
-      showToast(soundEnabled ? '🔊 科幻音效已開啟' : '🔇 音效已靜音');
+  <!-- 畫面 3：擲骰子決定先手（點數小者先開始） -->
+  <section id="screen-dice" class="cyber-card w-full max-w-lg rounded-2xl p-6 md:p-8 text-center space-y-6 hidden">
+    <div>
+      <div class="text-xs tracking-widest text-yellow-400 font-bold mb-1">PHASE 01 // INITIATIVE ROLL</div>
+      <h2 class="text-2xl font-black text-white">擲骰決定先攻順序</h2>
+      <p class="text-xs text-slate-300 mt-1">規則：雙方各擲一次骰子，<span class="text-yellow-300 font-bold">點數較小的一方先開始！</span></p>
+    </div>
+
+    <div class="grid grid-cols-2 gap-4">
+      <!-- 玩家 1 (😎) -->
+      <div class="bg-slate-950/80 border border-cyan-400/40 rounded-xl p-4 space-y-3">
+        <div class="text-3xl">😎</div>
+        <div class="text-xs font-bold text-cyan-300">玩家 1（房主）</div>
+        <div id="dice-p1" class="text-5xl font-black py-3 neon-text-cyan">?</div>
+        <button id="btn-roll-p1" class="cyber-btn-cyan w-full py-2.5 rounded-lg text-sm font-bold">
+          🎲 擲骰子
+        </button>
+      </div>
+
+      <!-- 玩家 2 (😈) -->
+      <div class="bg-slate-950/80 border border-pink-500/40 rounded-xl p-4 space-y-3">
+        <div class="text-3xl">😈</div>
+        <div class="text-xs font-bold text-pink-400">玩家 2（挑戰者）</div>
+        <div id="dice-p2" class="text-5xl font-black py-3 neon-text-pink">?</div>
+        <button id="btn-roll-p2" class="cyber-btn-pink w-full py-2.5 rounded-lg text-sm font-bold">
+          🎲 擲骰子
+        </button>
+      </div>
+    </div>
+
+    <div id="dice-result-banner" class="text-sm font-bold text-cyan-200 min-h-[24px]">
+      請雙方點擊各自按鈕擲出骰子...
+    </div>
+  </section>
+
+  <!-- 畫面 4：3x3 井字過三關主戰場 -->
+  <section id="screen-game" class="cyber-card w-full max-w-md rounded-2xl p-6 space-y-5 hidden">
+    <!-- 雙方資訊與回合狀態 -->
+    <div class="flex items-center justify-between bg-slate-950/80 border border-slate-700/80 rounded-xl px-4 py-3">
+      <div id="badge-p1" class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-transparent transition-all">
+        <span class="text-2xl">😎</span>
+        <div class="text-left">
+          <div class="text-[11px] text-cyan-300 font-bold">玩家 1</div>
+          <div id="role-tag-p1" class="text-[10px] text-slate-400">---</div>
+        </div>
+      </div>
+
+      <div class="text-center">
+        <div class="text-[10px] tracking-widest text-slate-400">TURN</div>
+        <div id="turn-indicator" class="text-sm font-black text-yellow-300">😎 回合</div>
+      </div>
+
+      <div id="badge-p2" class="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-transparent transition-all">
+        <div class="text-right">
+          <div class="text-[11px] text-pink-400 font-bold">玩家 2</div>
+          <div id="role-tag-p2" class="text-[10px] text-slate-400">---</div>
+        </div>
+        <span class="text-2xl">😈</span>
+      </div>
+    </div>
+
+    <!-- 九宮格棋盤 -->
+    <div id="board-grid" class="grid grid-cols-3 gap-3"></div>
+
+    <!-- 結果與再戰按鈕 -->
+    <div id="game-footer" class="text-center space-y-3 pt-1">
+      <div id="game-status-text" class="text-sm font-bold text-slate-300">準備落子...</div>
+      <button id="btn-rematch" class="cyber-btn-cyan w-full py-3 rounded-xl font-bold text-sm hidden">
+        🔄 再玩一局（重新擲骰決定先後）
+      </button>
+    </div>
+  </section>
+
+  <script>
+    // ========= 遊戲核心狀態 =========
+    const state = {
+      mode: 'online', // 'online' | 'local'
+      myRole: null,   // 'P1' | 'P2' | 'BOTH'
+      roomCode: '',
+      peer: null,
+      conn: null,
+      p1Dice: null,
+      p2Dice: null,
+      board: Array(9).fill(null),
+      currentTurn: 'P1',
+      winner: null,
+      winLine: []
     };
 
-    function playSynthSound(type) {
-      if (!soundEnabled) return;
-      try {
-        initAudio();
-        const now = audioCtx.currentTime;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-
-        if (type === 'click') {
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(520, now);
-          osc.frequency.exponentialRampToValueAtTime(880, now + 0.08);
-          gain.gain.setValueAtTime(0.15, now);
-          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
-          osc.start(now);
-          osc.stop(now + 0.08);
-        } else if (type === 'placeCool') {
-          osc.type = 'triangle';
-          osc.frequency.setValueAtTime(440, now);
-          osc.frequency.exponentialRampToValueAtTime(980, now + 0.16);
-          gain.gain.setValueAtTime(0.22, now);
-          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.16);
-          osc.start(now);
-          osc.stop(now + 0.16);
-        } else if (type === 'placeDevil') {
-          osc.type = 'sawtooth';
-          osc.frequency.setValueAtTime(320, now);
-          osc.frequency.exponentialRampToValueAtTime(160, now + 0.18);
-          gain.gain.setValueAtTime(0.18, now);
-          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.18);
-          osc.start(now);
-          osc.stop(now + 0.18);
-        } else if (type === 'dice') {
-          // 連續快速電子跳動聲
-          for (let i = 0; i < 6; i++) {
-            const o = audioCtx.createOscillator();
-            const g = audioCtx.createGain();
-            o.connect(g);
-            g.connect(audioCtx.destination);
-            o.type = 'square';
-            o.frequency.setValueAtTime(300 + i * 95, now + i * 0.07);
-            g.gain.setValueAtTime(0.09, now + i * 0.07);
-            g.gain.exponentialRampToValueAtTime(0.005, now + i * 0.07 + 0.06);
-            o.start(now + i * 0.07);
-            o.stop(now + i * 0.07 + 0.06);
-          }
-        } else if (type === 'win') {
-          const notes = [523.25, 659.25, 783.99, 1046.50];
-          notes.forEach((freq, idx) => {
-            const o = audioCtx.createOscillator();
-            const g = audioCtx.createGain();
-            o.connect(g);
-            g.connect(audioCtx.destination);
-            o.type = 'triangle';
-            o.frequency.setValueAtTime(freq, now + idx * 0.11);
-            g.gain.setValueAtTime(0.22, now + idx * 0.11);
-            g.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.11 + 0.35);
-            o.start(now + idx * 0.11);
-            o.stop(now + idx * 0.11 + 0.35);
-          });
-        } else if (type === 'draw') {
-          osc.type = 'sine';
-          osc.frequency.setValueAtTime(380, now);
-          osc.frequency.linearRampToValueAtTime(280, now + 0.35);
-          gain.gain.setValueAtTime(0.18, now);
-          gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
-          osc.start(now);
-          osc.stop(now + 0.35);
-        }
-      } catch (e) {
-        console.warn('Audio error:', e);
-      }
-    }
-
-    // ==================== 2. 粒子特效系統 ====================
-    const canvas = document.getElementById('particleCanvas');
-    const ctx = canvas.getContext('2d');
-    let particles = [];
-
-    function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
-
-    function spawnWinParticles(color) {
-      const colors = color === 'cyan' ? ['#00f3ff', '#38bdf8', '#ffffff'] : ['#ff007f', '#bc13fe', '#fcee0a'];
-      for (let i = 0; i < 85; i++) {
-        particles.push({
-          x: canvas.width / 2,
-          y: canvas.height / 2,
-          vx: (Math.random() - 0.5) * 14,
-          vy: (Math.random() - 0.5) * 14 - 3,
-          size: Math.random() * 5 + 2,
-          color: colors[Math.floor(Math.random() * colors.length)],
-          alpha: 1,
-          decay: Math.random() * 0.018 + 0.012
-        });
-      }
-    }
-
-    function animateParticles() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      for (let i = particles.length - 1; i >= 0; i--) {
-        const p = particles[i];
-        p.x += p.vx;
-        p.y += p.vy;
-        p.vy += 0.18; // 重力
-        p.alpha -= p.decay;
-        if (p.alpha <= 0) {
-          particles.splice(i, 1);
-          continue;
-        }
-        ctx.save();
-        ctx.globalAlpha = p.alpha;
-        ctx.fillStyle = p.color;
-        ctx.shadowBlur = 10;
-        ctx.shadowColor = p.color;
-        ctx.fillRect(p.x, p.y, p.size, p.size);
-        ctx.restore();
-      }
-      requestAnimationFrame(animateParticles);
-    }
-    window.onload = () => animateParticles();
-
-    // ==================== 3. Firebase 初始化與狀態管理 ====================
-    let db = null;
-    let auth = null;
-    let currentUser = null;
-    let firebaseReady = false;
-
-    let roomId = null;
-    let myRole = null; // 'p1' | 'p2'
-    let mode = 'local'; // 'online' | 'local'
-    let roomState = null;
-    let unsubscribeRoom = null;
-    let localRolling = { p1: false, p2: false };
-    let diceTieProcessing = false;
-
-    // 8 條勝利連線組合與 SVG 雷射座標 (viewBox 0 0 300 300)
     const WIN_LINES = [
-      { combo: [0, 1, 2], coords: [20, 50, 280, 50] },
-      { combo: [3, 4, 5], coords: [20, 150, 280, 150] },
-      { combo: [6, 7, 8], coords: [20, 250, 280, 250] },
-      { combo: [0, 3, 6], coords: [50, 20, 50, 280] },
-      { combo: [1, 4, 7], coords: [150, 20, 150, 280] },
-      { combo: [2, 5, 8], coords: [250, 20, 250, 280] },
-      { combo: [0, 4, 8], coords: [25, 25, 275, 275] },
-      { combo: [2, 4, 6], coords: [275, 25, 25, 275] }
+      [0, 1, 2], [3, 4, 5], [6, 7, 8], // 橫線
+      [0, 3, 6], [1, 4, 7], [2, 5, 8], // 直線
+      [0, 4, 8], [2, 4, 6]             // 斜線
     ];
 
-    // 骰子 1~6 點對應旋轉角度
-    const DICE_ROTATIONS = {
-      1: 'rotateX(0deg) rotateY(0deg)',
-      2: 'rotateX(0deg) rotateY(-90deg)',
-      3: 'rotateX(0deg) rotateY(180deg)',
-      4: 'rotateX(0deg) rotateY(90deg)',
-      5: 'rotateX(-90deg) rotateY(0deg)',
-      6: 'rotateX(90deg) rotateY(0deg)'
-    };
+    const DICE_ICONS = ['', '⚀', '⚁', '⚂', '⚃', '⚄', '⚅'];
 
-    // 骰子每一面在 3x3 網格亮起的點位
-    const FACE_PIPS = {
-      1: [4],
-      2: [2, 6],
-      3: [2, 4, 6],
-      4: [0, 2, 6, 8],
-      5: [0, 2, 4, 6, 8],
-      6: [0, 2, 3, 5, 6, 8]
-    };
-
-    const appId = typeof __app_id !== 'undefined' ? __app_id : 'cyber-tictactoe-app';
-
-    // ==================== 4. 基礎 UI 與工具函式 ====================
-    let toastTimer = null;
-    function showToast(msg) {
-      const box = document.getElementById('toastBox');
-      const content = document.getElementById('toastContent');
-      if (!box || !content) return;
-      content.textContent = msg;
-      box.classList.remove('opacity-0', '-translate-y-3');
-      box.classList.add('opacity-100', 'translate-y-0');
-      if (toastTimer) clearTimeout(toastTimer);
-      toastTimer = setTimeout(() => {
-        box.classList.remove('opacity-100', 'translate-y-0');
-        box.classList.add('opacity-0', '-translate-y-3');
-      }, 3000);
-    }
+    // ========= DOM 工具 =========
+    const $ = (id) => document.getElementById(id);
 
     function showScreen(screenId) {
-      ['lobbyScreen', 'waitingScreen', 'diceScreen', 'gameScreen'].forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.add('hidden');
+      ['screen-lobby', 'screen-waiting', 'screen-dice', 'screen-game'].forEach(id => {
+        $(id).classList.add('hidden');
       });
-      const target = document.getElementById(screenId);
-      if (target) target.classList.remove('hidden');
+      $(screenId).classList.remove('hidden');
+    }
 
-      const leaveBtn = document.getElementById('leaveRoomBtn');
-      if (leaveBtn) {
-        if (screenId === 'lobbyScreen') {
-          leaveBtn.classList.add('hidden');
-        } else {
-          leaveBtn.classList.remove('hidden');
-        }
-      }
+    function showToast(msg) {
+      const el = $('toast');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+      clearTimeout(el._timer);
+      el._timer = setTimeout(() => el.classList.add('hidden'), 3200);
     }
 
     function generateRoomCode() {
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-      let result = '';
-      for (let i = 0; i < 6; i++) {
-        result += chars.charAt(Math.floor(Math.random() * chars.length));
-      }
-      return result;
+      let code = '';
+      for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+      return code;
     }
 
-    function getPlayerNickname(fallback) {
-      const input = document.getElementById('playerNameInput');
-      const val = input ? input.value.trim() : '';
-      return val || fallback;
+    function getInviteUrl(code) {
+      const url = new URL(window.location.href);
+      url.searchParams.set('room', code);
+      return url.toString();
     }
 
-    function safeUpdateUrlRoomParam(code) {
+    // ========= 音效引擎（Web Audio API） =========
+    function playTone(freq, duration = 0.12, type = 'sine') {
       try {
-        if (window.location.protocol === 'blob:') {
-          window.location.hash = code ? `roomId=${code}` : '';
-          return;
-        }
-        const url = new URL(window.location.href);
-        if (code) {
-          url.searchParams.set('roomId', code);
-        } else {
-          url.searchParams.delete('roomId');
-        }
-        window.history.replaceState({}, '', url.toString());
-      } catch (e) {
-        try {
-          window.location.hash = code ? `roomId=${code}` : '';
-        } catch (_) {}
-      }
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, ctx.currentTime);
+        gain.gain.setValueAtTime(0.08, ctx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + duration);
+      } catch (e) {}
     }
 
-    function getInviteLink() {
-      try {
-        const base = window.location.href.split('#')[0].split('?')[0];
-        if (window.location.protocol === 'blob:') {
-          return `${base}#roomId=${roomId}`;
-        }
-        const url = new URL(base);
-        url.searchParams.set('roomId', roomId);
-        return url.toString();
-      } catch (e) {
-        return `${window.location.href.split('#')[0]}#roomId=${roomId}`;
-      }
-    }
-
-    function copyTextFallback(text, successMsg) {
-      const textarea = document.createElement('textarea');
-      textarea.value = text;
-      textarea.style.position = 'fixed';
-      textarea.style.opacity = '0';
-      document.body.appendChild(textarea);
-      textarea.select();
-      try {
-        document.execCommand('copy');
-        playSynthSound('click');
-        showToast(successMsg);
-      } catch (err) {
-        showToast('⚠️ 複製失敗，請手動選取複製');
-      }
-      document.body.removeChild(textarea);
-    }
-
-    window.copyInviteLink = function() {
-      if (!roomId) return;
-      copyTextFallback(getInviteLink(), '🔗 已複製專屬邀請連結！快傳給同學吧');
-    };
-
-    window.copyRoomCode = function() {
-      if (!roomId) return;
-      copyTextFallback(roomId, `📋 已複製房間代碼：${roomId}`);
-    };
-
-    // ==================== 5. 3D 骰子與九宮格 DOM 初始化 ====================
-    function buildDiceDOM() {
-      ['diceCube1', 'diceCube2'].forEach(cubeId => {
-        const cube = document.getElementById(cubeId);
-        if (!cube) return;
-        cube.innerHTML = '';
-        for (let face = 1; face <= 6; face++) {
-          const faceDiv = document.createElement('div');
-          faceDiv.className = `dice-face face-${face}`;
-          const activePips = FACE_PIPS[face];
-          for (let i = 0; i < 9; i++) {
-            const cell = document.createElement('div');
-            if (activePips.includes(i)) {
-              cell.className = 'pip';
-            }
-            faceDiv.appendChild(cell);
-          }
-          cube.appendChild(faceDiv);
-        }
-      });
-    }
-
-    function setDiceVisual(playerKey, value, isRolling) {
-      const cube = document.getElementById(playerKey === 'p1' ? 'diceCube1' : 'diceCube2');
-      if (!cube) return;
-      if (isRolling) {
-        cube.classList.add('rolling');
-      } else {
-        cube.classList.remove('rolling');
-        cube.style.transform = DICE_ROTATIONS[value] || DICE_ROTATIONS[1];
-      }
-    }
-
-    function buildBoardDOM() {
-      const grid = document.getElementById('boardGrid');
-      if (!grid) return;
+    // ========= 初始化棋盤格子 =========
+    function initBoardUI() {
+      const grid = $('board-grid');
       grid.innerHTML = '';
       for (let i = 0; i < 9; i++) {
         const cell = document.createElement('button');
-        cell.id = `cell-${i}`;
-        cell.type = 'button';
-        cell.className = 'board-cell rounded-2xl flex items-center justify-center text-4xl sm:text-6xl font-black focus:outline-none';
-        cell.onclick = () => handleCellClick(i);
+        cell.className = 'cell-box rounded-xl flex items-center justify-center text-5xl md:text-6xl select-none';
+        cell.dataset.index = i;
+        cell.addEventListener('click', () => onCellClick(i));
         grid.appendChild(cell);
       }
     }
 
-    buildDiceDOM();
-    buildBoardDOM();
+    // ========= P2P 連線邏輯（房主 P1） =========
+    function createOnlineRoom() {
+      state.mode = 'online';
+      state.myRole = 'P1';
+      state.roomCode = generateRoomCode();
+      const peerId = `cyber-ttt-${state.roomCode}`;
 
-    // ==================== 6. 單機同屏測試模式 ====================
-    window.startLocalTestMode = function() {
-      playSynthSound('click');
-      if (unsubscribeRoom) {
-        unsubscribeRoom();
-        unsubscribeRoom = null;
-      }
-      mode = 'local';
-      roomId = 'LOCAL';
-      myRole = 'p1';
-      localRolling = { p1: false, p2: false };
-      diceTieProcessing = false;
+      $('display-room-code').textContent = state.roomCode;
+      showScreen('screen-waiting');
 
-      const p1Name = getPlayerNickname('同學 A');
-      roomState = {
-        roomId: 'LOCAL',
-        phase: 'dice',
-        p1: { uid: 'local-p1', name: p1Name, symbol: '😎', score: 0, dice: null, rematch: false },
-        p2: { uid: 'local-p2', name: '同學 B', symbol: '😈', score: 0, dice: null, rematch: false },
-        board: ['', '', '', '', '', '', '', '', ''],
-        turn: null,
-        winner: null,
-        winLineIndex: null,
-        diceMessage: '單機雙人模式：請依序點擊兩邊的按鈕擲骰子（小者先攻）！',
-        draws: 0
-      };
-      renderGameState();
-    };
+      // 生成邀請連結與 QR Code
+      const inviteUrl = getInviteUrl(state.roomCode);
+      $('qrcode').innerHTML = '';
+      new QRCode($('qrcode'), {
+        text: inviteUrl,
+        width: 168,
+        height: 168,
+        colorDark: '#070913',
+        colorLight: '#ffffff'
+      });
 
-    // ==================== 7. 擲骰子邏輯（線上 + 單機） ====================
-    window.rollPlayerDice = function(targetPlayer) {
-      if (!roomState || roomState.phase !== 'dice') return;
-      if (mode === 'online' && targetPlayer !== myRole) return;
-      if (roomState[targetPlayer]?.dice !== null || localRolling[targetPlayer]) return;
+      state.peer = new Peer(peerId);
 
-      localRolling[targetPlayer] = true;
-      playSynthSound('dice');
+      state.peer.on('open', () => {
+        $('connection-status').textContent = '✅ 房間已就緒！等待另一位同學點擊連結或輸入代碼...';
+        $('connection-status').classList.remove('animate-pulse', 'text-amber-300');
+        $('connection-status').classList.add('text-emerald-400');
+      });
 
-      const btn = document.getElementById(targetPlayer === 'p1' ? 'rollP1Btn' : 'rollP2Btn');
-      const resEl = document.getElementById(targetPlayer === 'p1' ? 'diceP1Result' : 'diceP2Result');
-      if (btn) {
-        btn.disabled = true;
-        btn.textContent = '🎲 擲骰中...';
-      }
-      if (resEl) resEl.textContent = '高速旋轉中...';
-      setDiceVisual(targetPlayer, 1, true);
-
-      const rolledValue = Math.floor(Math.random() * 6) + 1;
-
-      setTimeout(async () => {
-        localRolling[targetPlayer] = false;
-        setDiceVisual(targetPlayer, rolledValue, false);
-
-        if (mode === 'local') {
-          roomState[targetPlayer].dice = rolledValue;
-          const p1Val = roomState.p1.dice;
-          const p2Val = roomState.p2.dice;
-
-          if (p1Val !== null && p2Val !== null) {
-            if (p1Val === p2Val) {
-              roomState.diceMessage = `⚡ 雙方皆擲出 ${p1Val} 點平手！2 秒後重新擲骰...`;
-              renderGameState();
-              setTimeout(() => {
-                if (roomState && roomState.phase === 'dice') {
-                  roomState.p1.dice = null;
-                  roomState.p2.dice = null;
-                  roomState.diceMessage = '🔄 點數相同！請雙方重新擲骰子（小者先攻）';
-                  renderGameState();
-                }
-              }, 2000);
-            } else {
-              const starter = p1Val < p2Val ? 'p1' : 'p2';
-              const starterName = roomState[starter].name;
-              roomState.diceMessage = `🎯 ${starterName} 點數較小（${Math.min(p1Val, p2Val)} 點 < ${Math.max(p1Val, p2Val)} 點），獲得先手！`;
-              renderGameState();
-              setTimeout(() => {
-                if (roomState && roomState.phase === 'dice') {
-                  roomState.phase = 'playing';
-                  roomState.turn = starter;
-                  renderGameState();
-                }
-              }, 1700);
-            }
-          } else {
-            roomState.diceMessage = `${roomState[targetPlayer].name} 已擲出 ${rolledValue} 點，等待另一位同學擲骰！`;
-            renderGameState();
-          }
-        } else {
-          try {
-            const ref = getRoomDocRef(roomId);
-            await updateDoc(ref, {
-              [`${targetPlayer}.dice`]: rolledValue,
-              diceMessage: `${roomState[targetPlayer].name} 已擲出 ${rolledValue} 點...`,
-              updatedAt: Date.now()
-            });
-          } catch (e) {
-            console.error(e);
-            showToast('⚠️ 同步骰子點數失敗，請重試');
-          }
-        }
-      }, 850);
-    };
-
-    async function initFirebase() {
-      try {
-        if (typeof __firebase_config !== 'undefined' && __firebase_config) {
-          const firebaseConfig = JSON.parse(__firebase_config);
-          if (!firebaseConfig || !firebaseConfig.apiKey) {
-            throw new Error('Missing Firebase apiKey');
-          }
-          const app = initializeApp(firebaseConfig);
-          db = getFirestore(app);
-          auth = getAuth(app);
-
-          if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
-            await signInWithCustomToken(auth, __initial_auth_token);
-          } else {
-            await signInAnonymously(auth);
-          }
-          currentUser = auth.currentUser;
-          firebaseReady = Boolean(currentUser);
-          updateConnectionBadge(firebaseReady, firebaseReady ? '雲端連線就緒' : '本機模式');
-        } else {
-          firebaseReady = false;
-          updateConnectionBadge(false, '本機雙人模式');
-        }
-      } catch (err) {
-        console.warn('Firebase init fallback to local mode:', err);
-        firebaseReady = false;
-        updateConnectionBadge(false, '本機雙人模式');
-      }
-    }
-
-    function updateConnectionBadge(online, text) {
-      const badge = document.getElementById('connectionBadge');
-      const label = document.getElementById('connectionText');
-      if (badge && label) {
-        badge.classList.remove('hidden');
-        label.textContent = text;
-        if (!online) {
-          badge.className = 'hidden sm:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-950/70 border border-purple-500/40 text-purple-300';
-        }
-      }
-    }
-
-    // ==================== 8. 線上房間建立、加入與即時同步 ====================
-    function getRoomDocRef(code) {
-      return doc(db, 'artifacts', appId, 'public', 'data', 'tictactoe_rooms', code);
-    }
-
-    window.createOnlineRoom = async function() {
-      playSynthSound('click');
-      if (!firebaseReady || !currentUser) {
-        // 若預覽環境未配置雲端資料庫，自動無縫啟動本機同屏雙人模式讓使用者可直接遊玩
-        showToast('⚡ 偵測為離線預覽環境，自動為您開啟同屏雙人對戰！');
-        startLocalTestMode();
-        return;
-      }
-
-      const btn = document.getElementById('createRoomBtn');
-      btn.disabled = true;
-
-      try {
-        const code = generateRoomCode();
-        const p1Name = getPlayerNickname('玩家 1');
-
-        const initialData = {
-          roomId: code,
-          phase: 'waiting', // 'waiting' | 'dice' | 'playing' | 'finished'
-          p1: { uid: currentUser.uid, name: p1Name, symbol: '😎', score: 0, dice: null, rematch: false },
-          p2: null,
-          board: ['', '', '', '', '', '', '', '', ''],
-          turn: null, // 'p1' | 'p2'
-          winner: null, // 'p1' | 'p2' | 'draw' | null
-          winLineIndex: null,
-          diceMessage: '請雙方點擊按鈕擲出自己的骰子！',
-          draws: 0,
-          updatedAt: Date.now()
-        };
-
-        await setDoc(getRoomDocRef(code), initialData);
-        roomId = code;
-        myRole = 'p1';
-        mode = 'online';
-
-        // 安全更新網址參數方便分享
-        safeUpdateUrlRoomParam(code);
-
-        subscribeToRoom(code);
-        showToast('⚡ 房間建立成功！請分享連結給同學');
-      } catch (err) {
-        console.error(err);
-        showToast('⚠️ 雲端建立受限，已自動切換為同屏雙人模式');
-        startLocalTestMode();
-      } finally {
-        btn.disabled = false;
-      }
-    };
-
-    window.joinOnlineRoom = async function(codeFromUrl = null) {
-      playSynthSound('click');
-      if (!firebaseReady || !currentUser) {
-        showToast('⚠️ 雲端連線尚未就緒，請稍候再試');
-        return;
-      }
-
-      const inputCode = (codeFromUrl || document.getElementById('roomCodeInput').value).trim().toUpperCase();
-      if (inputCode.length < 4) {
-        showToast('⚠️ 請輸入有效的房間代碼');
-        return;
-      }
-
-      const btn = document.getElementById('joinRoomBtn');
-      btn.disabled = true;
-
-      try {
-        const ref = getRoomDocRef(inputCode);
-        const snap = await getDoc(ref);
-
-        if (!snap.exists()) {
-          showToast('❌ 找不到此房間代碼，請確認是否輸入正確');
-          btn.disabled = false;
-          return;
-        }
-
-        const data = snap.data();
-
-        // 若自己已經是 p1 或 p2，直接重連進入
-        if (data.p1 && data.p1.uid === currentUser.uid) {
-          roomId = inputCode;
-          myRole = 'p1';
-          mode = 'online';
-          subscribeToRoom(inputCode);
-          return;
-        }
-        if (data.p2 && data.p2.uid === currentUser.uid) {
-          roomId = inputCode;
-          myRole = 'p2';
-          mode = 'online';
-          subscribeToRoom(inputCode);
-          return;
-        }
-
-        if (data.p2 !== null) {
-          showToast('🚫 此房間已滿員（限 2 人對戰）');
-          btn.disabled = false;
-          return;
-        }
-
-        const p2Name = getPlayerNickname('玩家 2');
-        await updateDoc(ref, {
-          p2: { uid: currentUser.uid, name: p2Name, symbol: '😈', score: 0, dice: null, rematch: false },
-          phase: 'dice',
-          diceMessage: '兩位同學已就位！請擲骰決定先手（點數小者先攻）',
-          updatedAt: Date.now()
+      state.peer.on('connection', (conn) => {
+        state.conn = conn;
+        setupConnectionHandlers(conn);
+        conn.on('open', () => {
+          showToast('🔥 對手已連線！進入擲骰子階段');
+          startDicePhase();
+          sendPacket({ type: 'START_DICE' });
         });
+      });
 
-        roomId = inputCode;
-        myRole = 'p2';
-        mode = 'online';
-
-        safeUpdateUrlRoomParam(inputCode);
-
-        subscribeToRoom(inputCode);
-        showToast('😈 成功加入戰局！準備擲骰子');
-      } catch (err) {
-        console.error(err);
-        showToast('❌ 加入房間發生錯誤');
-      } finally {
-        btn.disabled = false;
-      }
-    };
-
-    function subscribeToRoom(code) {
-      if (unsubscribeRoom) unsubscribeRoom();
-      unsubscribeRoom = onSnapshot(
-        getRoomDocRef(code),
-        (snapshot) => {
-          if (!snapshot.exists()) {
-            showToast('⚠️ 房間已關閉');
-            resetToLobby();
-            return;
-          }
-          const prevPhase = roomState ? roomState.phase : null;
-          const prevWinner = roomState ? roomState.winner : null;
-          roomState = snapshot.data();
-
-          // 音效觸發偵測
-          if (prevPhase === 'waiting' && roomState.phase === 'dice') {
-            playSynthSound('win');
-            showToast('🎮 同學已加入！進入擲骰子階段');
-          }
-          if (prevPhase !== 'finished' && roomState.phase === 'finished') {
-            if (roomState.winner === 'draw') {
-              playSynthSound('draw');
-            } else {
-              playSynthSound('win');
-              spawnWinParticles(roomState.winner === 'p1' ? 'cyan' : 'pink');
-            }
-          }
-
-          // 若雙方皆已擲出骰子但尚未結算（防止同時點擊擲骰造成的競態條件），由房主統一結算
-          if (
-            myRole === 'p1' &&
-            roomState.phase === 'dice' &&
-            roomState.p1?.dice !== null &&
-            roomState.p2?.dice !== null &&
-            !diceTieProcessing
-          ) {
-            diceTieProcessing = true;
-            resolveOnlineDiceOutcome(code, roomState);
-          }
-
-          renderGameState();
-        },
-        (error) => {
-          console.error('Snapshot listener error:', error);
-          showToast('⚠️ 即時同步連線中斷，請重新整理');
-        }
-      );
+      state.peer.on('error', (err) => {
+        showToast('連線初始化異常，請重新整理再試：' + err.type);
+      });
     }
 
-    async function resolveOnlineDiceOutcome(code, latest) {
-      try {
-        const ref = getRoomDocRef(code);
-        const p1Val = latest.p1.dice;
-        const p2Val = latest.p2.dice;
+    // ========= P2P 連線邏輯（挑戰者 P2） =========
+    function joinOnlineRoom(rawCode) {
+      const code = (rawCode || '').trim().toUpperCase();
+      if (code.length < 4) {
+        showToast('請輸入正確的 6 位房間代碼');
+        return;
+      }
+      state.mode = 'online';
+      state.myRole = 'P2';
+      state.roomCode = code;
 
-        if (p1Val === p2Val) {
-          await updateDoc(ref, {
-            diceMessage: `⚡ 雙方皆擲出 ${p1Val} 點平手！2 秒後重新擲骰...`,
-            updatedAt: Date.now()
-          });
-          setTimeout(async () => {
-            try {
-              const s2 = await getDoc(ref);
-              if (s2.exists()) {
-                const d2 = s2.data();
-                if (d2.phase === 'dice' && d2.p1.dice === d2.p2.dice && d2.p1.dice !== null) {
-                  await updateDoc(ref, {
-                    'p1.dice': null,
-                    'p2.dice': null,
-                    diceMessage: '🔄 點數相同！請雙方重新擲骰子（小者先攻）',
-                    updatedAt: Date.now()
-                  });
-                }
-              }
-            } finally {
-              diceTieProcessing = false;
-            }
-          }, 2000);
-        } else {
-          const starter = p1Val < p2Val ? 'p1' : 'p2';
-          const starterName = starter === 'p1' ? latest.p1.name : latest.p2.name;
-          await updateDoc(ref, {
-            diceMessage: `🎯 ${starterName} 點數較小（${Math.min(p1Val, p2Val)} 點 < ${Math.max(p1Val, p2Val)} 點），獲得先手！`,
-            updatedAt: Date.now()
-          });
-          setTimeout(async () => {
-            try {
-              await updateDoc(ref, {
-                phase: 'playing',
-                turn: starter,
-                updatedAt: Date.now()
-              });
-            } finally {
-              diceTieProcessing = false;
-            }
-          }, 1800);
+      $('btn-join-room').disabled = true;
+      $('btn-join-room').textContent = '連線中...';
+
+      state.peer = new Peer();
+      state.peer.on('open', () => {
+        const conn = state.peer.connect(`cyber-ttt-${code}`, { reliable: true });
+        state.conn = conn;
+        setupConnectionHandlers(conn);
+
+        conn.on('open', () => {
+          showToast('⚡ 成功連線至房間 ' + code);
+        });
+      });
+
+      state.peer.on('error', () => {
+        $('btn-join-room').disabled = false;
+        $('btn-join-room').textContent = '加入戰局';
+        showToast('找不到該房間或房主已離線，請確認代碼！');
+      });
+    }
+
+    function sendPacket(data) {
+      if (state.mode === 'online' && state.conn && state.conn.open) {
+        state.conn.send(data);
+      }
+    }
+
+    function setupConnectionHandlers(conn) {
+      conn.on('data', (data) => {
+        if (data.type === 'START_DICE') {
+          startDicePhase();
+        } else if (data.type === 'DICE_ROLLED') {
+          applyDiceRoll(data.player, data.value, false);
+        } else if (data.type === 'MOVE') {
+          applyMove(data.index, data.player, false);
+        } else if (data.type === 'REMATCH') {
+          startDicePhase();
         }
+      });
+
+      conn.on('close', () => {
+        showToast('⚠️ 對手已斷開連線');
+      });
+    }
+
+    // ========= 階段一：擲骰子決定先手 =========
+    function startDicePhase() {
+      state.p1Dice = null;
+      state.p2Dice = null;
+      state.board = Array(9).fill(null);
+      state.winner = null;
+      state.winLine = [];
+
+      $('dice-p1').textContent = '?';
+      $('dice-p2').textContent = '?';
+      $('dice-result-banner').textContent = '請雙方點擊各自按鈕擲出骰子（點數小者先攻）...';
+
+      if (state.mode === 'local') {
+        $('btn-roll-p1').disabled = false;
+        $('btn-roll-p2').disabled = false;
+      } else {
+        $('btn-roll-p1').disabled = (state.myRole !== 'P1');
+        $('btn-roll-p2').disabled = (state.myRole !== 'P2');
+      }
+
+      showScreen('screen-dice');
+    }
+
+    function rollDiceFor(player) {
+      if (player === 'P1' && state.p1Dice !== null) return;
+      if (player === 'P2' && state.p2Dice !== null) return;
+
+      const value = Math.floor(Math.random() * 6) + 1;
+      applyDiceRoll(player, value, true);
+    }
+
+    function applyDiceRoll(player, value, shouldBroadcast) {
+      const diceEl = player === 'P1' ? $('dice-p1') : $('dice-p2');
+      const btnEl = player === 'P1' ? $('btn-roll-p1') : $('btn-roll-p2');
+
+      btnEl.disabled = true;
+      diceEl.classList.add('dice-rolling');
+      playTone(440, 0.1, 'triangle');
+
+      if (shouldBroadcast) {
+        sendPacket({ type: 'DICE_ROLLED', player, value });
+      }
+
+      setTimeout(() => {
+        diceEl.classList.remove('dice-rolling');
+        diceEl.textContent = `${DICE_ICONS[value]} ${value}`;
+        playTone(660, 0.15, 'sine');
+
+        if (player === 'P1') state.p1Dice = value;
+        if (player === 'P2') state.p2Dice = value;
+
+        evaluateDiceResults();
+      }, 500);
+    }
+
+    function evaluateDiceResults() {
+      if (state.p1Dice === null || state.p2Dice === null) {
+        $('dice-result-banner').textContent = '已擲骰！等待另一位玩家擲骰...';
+        return;
+      }
+
+      if (state.p1Dice === state.p2Dice) {
+        $('dice-result-banner').innerHTML = `<span class="text-amber-300">⚡ 雙方皆擲出 ${state.p1Dice} 點平手！1.5 秒後重新擲骰...</span>`;
+        setTimeout(() => {
+          state.p1Dice = null;
+          state.p2Dice = null;
+          $('dice-p1').textContent = '?';
+          $('dice-p2').textContent = '?';
+          if (state.mode === 'local') {
+            $('btn-roll-p1').disabled = false;
+            $('btn-roll-p2').disabled = false;
+          } else {
+            $('btn-roll-p1').disabled = (state.myRole !== 'P1');
+            $('btn-roll-p2').disabled = (state.myRole !== 'P2');
+          }
+          $('dice-result-banner').textContent = '請重新擲骰！';
+        }, 1500);
+        return;
+      }
+
+      // 規則：小的先開始
+      const starter = state.p1Dice < state.p2Dice ? 'P1' : 'P2';
+      const starterLabel = starter === 'P1' ? '😎 玩家 1' : '😈 玩家 2';
+      $('dice-result-banner').innerHTML = `<span class="text-emerald-400">🎯 ${starterLabel} 點數較小，獲得先攻權！即將進入戰場...</span>`;
+
+      setTimeout(() => {
+        startBoardGame(starter);
+      }, 1500);
+    }
+
+    // ========= 階段二：井字過三關對戰 =========
+    function startBoardGame(starter) {
+      state.currentTurn = starter;
+      $('btn-rematch').classList.add('hidden');
+
+      if (state.mode === 'local') {
+        $('role-tag-p1').textContent = '本機控制';
+        $('role-tag-p2').textContent = '本機控制';
+      } else {
+        $('role-tag-p1').textContent = state.myRole === 'P1' ? '你（我方）' : '對手';
+        $('role-tag-p2').textContent = state.myRole === 'P2' ? '你（我方）' : '對手';
+      }
+
+      initBoardUI();
+      updateBoardUI();
+      showScreen('screen-game');
+    }
+
+    function onCellClick(index) {
+      if (state.winner || state.board[index] !== null) return;
+
+      // 線上模式檢查是否輪到自己
+      if (state.mode === 'online' && state.myRole !== state.currentTurn) {
+        showToast('⏳ 還沒輪到你，請等待對手落子！');
+        return;
+      }
+
+      applyMove(index, state.currentTurn, true);
+    }
+
+    function applyMove(index, player, shouldBroadcast) {
+      if (state.board[index] !== null || state.winner) return;
+
+      state.board[index] = player;
+      playTone(player === 'P1' ? 520 : 380, 0.12, 'square');
+
+      if (shouldBroadcast) {
+        sendPacket({ type: 'MOVE', index, player });
+      }
+
+      // 檢查勝負或平手
+      const winLine = checkWinner(player);
+      if (winLine) {
+        state.winner = player;
+        state.winLine = winLine;
+        playTone(880, 0.3, 'triangle');
+      } else if (state.board.every(cell => cell !== null)) {
+        state.winner = 'DRAW';
+      } else {
+        state.currentTurn = player === 'P1' ? 'P2' : 'P1';
+      }
+
+      updateBoardUI();
+    }
+
+    function checkWinner(player) {
+      for (const line of WIN_LINES) {
+        if (line.every(idx => state.board[idx] === player)) {
+          return line;
+        }
+      }
+      return null;
+    }
+
+    function updateBoardUI() {
+      const cells = $('board-grid').children;
+      const isMyTurn = state.mode === 'local' || state.myRole === state.currentTurn;
+
+      for (let i = 0; i < 9; i++) {
+        const val = state.board[i];
+        const cell = cells[i];
+        cell.textContent = val === 'P1' ? '😎' : (val === 'P2' ? '😈' : '');
+        cell.classList.toggle('occupied', val !== null);
+        cell.classList.toggle('locked', !isMyTurn || Boolean(state.winner));
+        cell.classList.toggle('cell-win', state.winLine.includes(i));
+      }
+
+      // 更新雙方高亮框
+      $('badge-p1').style.borderColor = (!state.winner && state.currentTurn === 'P1') ? 'var(--neon-cyan)' : 'transparent';
+      $('badge-p2').style.borderColor = (!state.winner && state.currentTurn === 'P2') ? 'var(--neon-pink)' : 'transparent';
+
+      if (state.winner === 'P1') {
+        $('turn-indicator').textContent = '😎 獲勝！';
+        $('game-status-text').innerHTML = '<span class="neon-text-cyan text-base">🏆 😎 玩家 1 連成一線取得勝利！</span>';
+        $('btn-rematch').classList.remove('hidden');
+      } else if (state.winner === 'P2') {
+        $('turn-indicator').textContent = '😈 獲勝！';
+        $('game-status-text').innerHTML = '<span class="neon-text-pink text-base">🏆 😈 玩家 2 連成一線取得勝利！</span>';
+        $('btn-rematch').classList.remove('hidden');
+      } else if (state.winner === 'DRAW') {
+        $('turn-indicator').textContent = '平手！';
+        $('game-status-text').innerHTML = '<span class="text-yellow-300 text-base">🤝 棋盤已滿無人連線，雙方平手！</span>';
+        $('btn-rematch').classList.remove('hidden');
+      } else {
+        const symbol = state.currentTurn === 'P1' ? '😎' : '😈';
+        $('turn-indicator').textContent = `${symbol} 回合`;
+        $('game-status-text').textContent = isMyTurn
+          ? `輪到你了（${symbol}），請點擊九宮格落子！`
+          : `等待對手（${symbol}）思考落子中...`;
+      }
+    }
+
+    // ========= 按鈕事件綁定 =========
+    $('btn-create-room').addEventListener('click', createOnlineRoom);
+
+    $('btn-join-room').addEventListener('click', () => {
+      joinOnlineRoom($('input-room-code').value);
+    });
+
+    $('btn-local-mode').addEventListener('click', () => {
+      state.mode = 'local';
+      state.myRole = 'BOTH';
+      startDicePhase();
+    });
+
+    $('btn-copy-link').addEventListener('click', async () => {
+      const url = getInviteUrl(state.roomCode);
+      const text = `⚡ 來玩賽博井字過三關（😎 vs 😈）！\n點擊連結直接加入我的房間：\n${url}\n（或輸入房間代碼：${state.roomCode}）`;
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast('✅ 已複製邀請連結！快貼給同學吧！');
       } catch (e) {
-        console.error('Resolve dice error:', e);
-        diceTieProcessing = false;
+        prompt('請手動複製以下邀請連結傳給同學：', url);
       }
-    }
+    });
 
-    // ==================== 12. 井字過三關落子與勝負判定 ====================
-    async function handleCellClick(index) {
-      if (!roomState || roomState.phase !== 'playing') return;
-      if (roomState.board[index] !== '') return;
+    $('btn-roll-p1').addEventListener('click', () => rollDiceFor('P1'));
+    $('btn-roll-p2').addEventListener('click', () => rollDiceFor('P2'));
 
-      // 檢查是否輪到自己
-      if (mode === 'online' && roomState.turn !== myRole) {
-        showToast('⏳ 還沒輪到你喔，請等待對手落子！');
-        return;
-      }
+    $('btn-rematch').addEventListener('click', () => {
+      startDicePhase();
+      sendPacket({ type: 'REMATCH' });
+    });
 
-      const activePlayer = roomState.turn; // 'p1' or 'p2'
-      const symbol = activePlayer === 'p1' ? '😎' : '😈';
-      playSynthSound(activePlayer === 'p1' ? 'placeCool' : 'placeDevil');
-
-      const newBoard = [...roomState.board];
-      newBoard[index] = symbol;
-
-      // 檢查是否連成三線
-      let winLineIdx = null;
-      for (let i = 0; i < WIN_LINES.length; i++) {
-        const [a, b, c] = WIN_LINES[i].combo;
-        if (newBoard[a] && newBoard[a] === newBoard[b] && newBoard[a] === newBoard[c]) {
-          winLineIdx = i;
-          break;
-        }
-      }
-
-      const isDraw = winLineIdx === null && newBoard.every(cell => cell !== '');
-      const nextTurn = activePlayer === 'p1' ? 'p2' : 'p1';
-
-      if (mode === 'local') {
-        roomState.board = newBoard;
-        if (winLineIdx !== null) {
-          roomState.phase = 'finished';
-          roomState.winner = activePlayer;
-          roomState.winLineIndex = winLineIdx;
-          roomState[activePlayer].score += 1;
-          playSynthSound('win');
-          spawnWinParticles(activePlayer === 'p1' ? 'cyan' : 'pink');
-        } else if (isDraw) {
-          roomState.phase = 'finished';
-          roomState.winner = 'draw';
-          roomState.draws = (roomState.draws || 0) + 1;
-          playSynthSound('draw');
-        } else {
-          roomState.turn = nextTurn;
-        }
-        renderGameState();
-        return;
-      }
-
-      if (mode === 'online') {
-        try {
-          const ref = getRoomDocRef(roomId);
-          const updates = {
-            board: newBoard,
-            updatedAt: Date.now()
-          };
-
-          if (winLineIdx !== null) {
-            updates.phase = 'finished';
-            updates.winner = activePlayer;
-            updates.winLineIndex = winLineIdx;
-            updates[`${activePlayer}.score`] = (roomState[activePlayer].score || 0) + 1;
-          } else if (isDraw) {
-            updates.phase = 'finished';
-            updates.winner = 'draw';
-            updates.draws = (roomState.draws || 0) + 1;
-          } else {
-            updates.turn = nextTurn;
-          }
-
-          await updateDoc(ref, updates);
-        } catch (err) {
-          console.error(err);
-          showToast('⚠️ 落子同步失敗，請檢查網路連線');
-        }
-      }
-    }
-
-    // ==================== 13. 再戰一局（重新擲骰） ====================
-    window.requestRematch = async function() {
-      playSynthSound('click');
-      if (!roomState || roomState.phase !== 'finished') return;
-
-      if (mode === 'local') {
-        roomState.phase = 'dice';
-        roomState.board = ['', '', '', '', '', '', '', '', ''];
-        roomState.winner = null;
-        roomState.winLineIndex = null;
-        roomState.turn = null;
-        roomState.p1.dice = null;
-        roomState.p2.dice = null;
-        roomState.p1.rematch = false;
-        roomState.p2.rematch = false;
-        roomState.diceMessage = '新一局開始！請雙方擲骰子決定先手（小者先攻）';
-        renderGameState();
-        return;
-      }
-
-      try {
-        const ref = getRoomDocRef(roomId);
-        const otherRole = myRole === 'p1' ? 'p2' : 'p1';
-        const otherReady = roomState[otherRole]?.rematch;
-
-        if (otherReady) {
-          // 雙方皆已同意再戰，直接重置進入擲骰子階段
-          await updateDoc(ref, {
-            phase: 'dice',
-            board: ['', '', '', '', '', '', '', '', ''],
-            winner: null,
-            winLineIndex: null,
-            turn: null,
-            'p1.dice': null,
-            'p2.dice': null,
-            'p1.rematch': false,
-            'p2.rematch': false,
-            diceMessage: '新一局開始！請雙方擲骰子決定先手（小者先攻）',
-            updatedAt: Date.now()
-          });
-        } else {
-          await updateDoc(ref, {
-            [`${myRole}.rematch`]: true,
-            updatedAt: Date.now()
-          });
-          showToast('✅ 已發送再戰請求，等待對手確認...');
-        }
-      } catch (err) {
-        console.error(err);
-        showToast('⚠️ 發送再戰請求失敗');
-      }
-    };
-
-    // ==================== 14. 核心畫面渲染引擎 ====================
-    function renderGameState() {
-      if (!roomState) return;
-
-      // 1. 等待畫面
-      if (roomState.phase === 'waiting') {
-        showScreen('waitingScreen');
-        document.getElementById('displayRoomCode').textContent = roomState.roomId;
-        return;
-      }
-
-      // 2. 擲骰子畫面
-      if (roomState.phase === 'dice') {
-        showScreen('diceScreen');
-        document.getElementById('diceP1Name').textContent = roomState.p1.name;
-        document.getElementById('diceP2Name').textContent = roomState.p2 ? roomState.p2.name : '玩家 2';
-        document.getElementById('diceStatusBanner').textContent = roomState.diceMessage || '請擲出骰子！';
-
-        // 更新 P1 骰子狀態
-        const p1Dice = roomState.p1.dice;
-        const p1Btn = document.getElementById('rollP1Btn');
-        const p1Res = document.getElementById('diceP1Result');
-        if (p1Dice !== null) {
-          setDiceVisual('p1', p1Dice, false);
-          p1Res.textContent = `擲出：${p1Dice} 點`;
-          p1Btn.disabled = true;
-          p1Btn.textContent = '已完成擲骰';
-        } else if (!localRolling.p1) {
-          setDiceVisual('p1', 1, false);
-          p1Res.textContent = '等待擲骰...';
-          const canRollP1 = mode === 'local' || myRole === 'p1';
-          p1Btn.disabled = !canRollP1;
-          p1Btn.textContent = canRollP1 ? '🎲 擲出骰子' : '等待房主擲骰';
-        }
-
-        // 更新 P2 骰子狀態
-        const p2Dice = roomState.p2 ? roomState.p2.dice : null;
-        const p2Btn = document.getElementById('rollP2Btn');
-        const p2Res = document.getElementById('diceP2Result');
-        if (p2Dice !== null) {
-          setDiceVisual('p2', p2Dice, false);
-          p2Res.textContent = `擲出：${p2Dice} 點`;
-          p2Btn.disabled = true;
-          p2Btn.textContent = '已完成擲骰';
-        } else if (!localRolling.p2) {
-          setDiceVisual('p2', 1, false);
-          p2Res.textContent = '等待擲骰...';
-          const canRollP2 = mode === 'local' || myRole === 'p2';
-          p2Btn.disabled = !canRollP2;
-          p2Btn.textContent = canRollP2 ? '🎲 擲出骰子' : '等待對手擲骰';
-        }
-        return;
-      }
-
-      // 3. 棋盤對戰與結算畫面
-      if (roomState.phase === 'playing' || roomState.phase === 'finished') {
-        showScreen('gameScreen');
-
-        // 更新計分板與名稱
-        document.getElementById('gameP1Name').textContent = roomState.p1.name;
-        document.getElementById('gameP2Name').textContent = roomState.p2.name;
-        document.getElementById('p1Score').textContent = roomState.p1.score || 0;
-        document.getElementById('p2Score').textContent = roomState.p2.score || 0;
-        document.getElementById('drawScore').textContent = roomState.draws || 0;
-        document.getElementById('gameRoomBadge').textContent = roomState.roomId;
-
-        // 回合指示器與卡片高亮
-        const p1Card = document.getElementById('p1Card');
-        const p2Card = document.getElementById('p2Card');
-        const p1Tag = document.getElementById('p1TurnTag');
-        const p2Tag = document.getElementById('p2TurnTag');
-        const turnBanner = document.getElementById('turnBanner');
-
-        if (roomState.phase === 'playing') {
-          const isP1Turn = roomState.turn === 'p1';
-          p1Card.style.transform = isP1Turn ? 'scale(1.04)' : 'scale(1)';
-          p2Card.style.transform = !isP1Turn ? 'scale(1.04)' : 'scale(1)';
-          p1Tag.style.opacity = isP1Turn ? '1' : '0';
-          p2Tag.style.opacity = !isP1Turn ? '1' : '0';
-
-          const activeName = isP1Turn ? roomState.p1.name : roomState.p2.name;
-          const activeEmoji = isP1Turn ? '😎' : '😈';
-          const isMyTurn = mode === 'local' || myRole === roomState.turn;
-
-          turnBanner.textContent = isMyTurn
-            ? `⚡ 輪到你了！請放置「${activeEmoji}」`
-            : `⏳ 等待 ${activeName} (${activeEmoji}) 落子...`;
-          turnBanner.className = isP1Turn
-            ? 'w-full py-2.5 px-4 mb-4 rounded-2xl bg-cyan-950/70 border border-cyan-400 text-center font-black text-sm sm:text-base text-cyan-200 shadow-[0_0_20px_rgba(0,243,255,0.3)] transition-all'
-            : 'w-full py-2.5 px-4 mb-4 rounded-2xl bg-pink-950/70 border border-pink-400 text-center font-black text-sm sm:text-base text-pink-200 shadow-[0_0_20px_rgba(255,0,127,0.3)] transition-all';
-        } else {
-          p1Card.style.transform = 'scale(1)';
-          p2Card.style.transform = 'scale(1)';
-          p1Tag.style.opacity = '0';
-          p2Tag.style.opacity = '0';
-          turnBanner.textContent = '🏁 本局對戰已結束';
-          turnBanner.className = 'w-full py-2.5 px-4 mb-4 rounded-2xl bg-purple-950/70 border border-purple-400 text-center font-black text-sm sm:text-base text-purple-200 transition-all';
-        }
-
-        // 渲染 9 宮格內容
-        const isMyTurnNow = roomState.phase === 'playing' && (mode === 'local' || myRole === roomState.turn);
-        for (let i = 0; i < 9; i++) {
-          const cellEl = document.getElementById(`cell-${i}`);
-          const val = roomState.board[i];
-          cellEl.innerHTML = '';
-          cellEl.classList.remove('occupied', 'disabled');
-
-          if (val === '😎') {
-            cellEl.classList.add('occupied');
-            cellEl.innerHTML = `<span class="symbol-cool">😎</span>`;
-          } else if (val === '😈') {
-            cellEl.classList.add('occupied');
-            cellEl.innerHTML = `<span class="symbol-devil">😈</span>`;
-          } else if (!isMyTurnNow) {
-            cellEl.classList.add('disabled');
-          }
-        }
-
-        // 雷射連線與結算面板
-        const laserOverlay = document.getElementById('laserOverlay');
-        const laserLine = document.getElementById('winLaserLine');
-        const resultBox = document.getElementById('roundResultBox');
-
-        if (roomState.phase === 'finished') {
-          resultBox.classList.remove('hidden');
-          const winTitle = document.getElementById('winnerAnnouncement');
-          const rematchText = document.getElementById('rematchStatusText');
-          const rematchBtn = document.getElementById('rematchBtn');
-
-          if (roomState.winner === 'draw') {
-            laserOverlay.classList.add('hidden');
-            winTitle.textContent = '🤝 勢均力敵！本局平手';
-            winTitle.className = 'text-xl sm:text-2xl font-black text-purple-300 mb-2';
-          } else {
-            const winPlayer = roomState[roomState.winner];
-            winTitle.textContent = `🏆 ${winPlayer.symbol} ${winPlayer.name} 獲勝！`;
-            winTitle.className = roomState.winner === 'p1'
-              ? 'text-xl sm:text-2xl font-black text-glow-cyan mb-2'
-              : 'text-xl sm:text-2xl font-black text-glow-pink mb-2';
-
-            if (roomState.winLineIndex !== null && WIN_LINES[roomState.winLineIndex]) {
-              const [x1, y1, x2, y2] = WIN_LINES[roomState.winLineIndex].coords;
-              laserLine.setAttribute('x1', x1);
-              laserLine.setAttribute('y1', y1);
-              laserLine.setAttribute('x2', x2);
-              laserLine.setAttribute('y2', y2);
-              laserLine.setAttribute('stroke', roomState.winner === 'p1' ? '#00f3ff' : '#ff007f');
-              laserOverlay.classList.remove('hidden');
-            }
-          }
-
-          if (mode === 'online') {
-            const myReady = roomState[myRole]?.rematch;
-            const otherRole = myRole === 'p1' ? 'p2' : 'p1';
-            const otherReady = roomState[otherRole]?.rematch;
-
-            if (myReady) {
-              rematchBtn.disabled = true;
-              rematchBtn.textContent = '⏳ 已準備，等待對手確認...';
-              rematchText.textContent = '已向對手發送再戰邀請！';
-            } else if (otherReady) {
-              rematchBtn.disabled = false;
-              rematchBtn.textContent = '🔥 對手要求再戰！點擊接受';
-              rematchText.textContent = '對手已準備好進行下一局（重新擲骰）！';
-            } else {
-              rematchBtn.disabled = false;
-              rematchBtn.textContent = '🔄 再戰一局（重新擲骰）';
-              rematchText.textContent = '雙方確認後將重新擲骰決定先手';
-            }
-          } else {
-            rematchBtn.disabled = false;
-            rematchBtn.textContent = '🔄 再戰一局（重新擲骰）';
-            rematchText.textContent = '點擊開始下一回合對決';
-          }
-        } else {
-          laserOverlay.classList.add('hidden');
-          resultBox.classList.add('hidden');
-        }
-      }
-    }
-
-    // ==================== 15. 離開房間與初始化啟動 ====================
-    window.confirmLeaveRoom = function() {
-      playSynthSound('click');
-      resetToLobby();
-      showToast('已離開對戰房間');
-    };
-
-    function resetToLobby() {
-      if (unsubscribeRoom) {
-        unsubscribeRoom();
-        unsubscribeRoom = null;
-      }
-      roomId = null;
-      myRole = null;
-      roomState = null;
-      safeUpdateUrlRoomParam(null);
-      showScreen('lobbyScreen');
-    }
-
-    // 啟動初始化並檢查網址是否帶有 roomId 邀請參數
-    (async function boot() {
-      await initFirebase();
+    // ========= 自動偵測邀請連結上的 ?room=XXXXXX =========
+    window.addEventListener('DOMContentLoaded', () => {
       const params = new URLSearchParams(window.location.search);
-      const hashMatch = window.location.hash.match(/roomId=([A-Za-z0-9]+)/i);
-      const invitedRoom = params.get('roomId') || (hashMatch ? hashMatch[1] : null);
-      if (invitedRoom) {
-        document.getElementById('roomCodeInput').value = invitedRoom.toUpperCase();
-        showToast(`📩 偵測到邀請房間 ${invitedRoom.toUpperCase()}，正在自動連線...`);
-        if (firebaseReady) {
-          joinOnlineRoom(invitedRoom.toUpperCase());
-        }
+      const inviteCode = params.get('room');
+      if (inviteCode) {
+        $('input-room-code').value = inviteCode.toUpperCase();
+        showToast(`偵測到邀請房間 ${inviteCode.toUpperCase()}，正在自動連線...`);
+        setTimeout(() => joinOnlineRoom(inviteCode), 400);
       }
-    })();
+    });
   </script>
 </body>
 </html>
